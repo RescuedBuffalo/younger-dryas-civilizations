@@ -1,0 +1,11 @@
+[package]
+name = "ai-planner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+simcore = { workspace = true }
+ai-eval = { workspace = true }
+serde = { workspace = true }
+

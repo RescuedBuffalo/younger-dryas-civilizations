@@ -1,0 +1,15 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "younger-dryas-cli"
+path = "src/main.rs"
+
+[dependencies]
+simcore = { workspace = true }
+ai-planner = { workspace = true }
+anyhow = { workspace = true }
+

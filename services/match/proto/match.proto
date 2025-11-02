@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+package match.v1;
+
+// Match service - Headless clients create/observe/act/advance matches
+service Match {
+  // Create a new match (≤100ms)
+  rpc CreateMatch(CreateMatchRequest) returns (CreateMatchResponse);
+  
+  // Get player's observation of current state (≤50ms)
+  rpc GetObservation(ObservationRequest) returns (Observation);
+  
+  // Submit an action (idempotent via action_id, ≤25ms)
+  rpc SubmitAction(ActionRequest) returns (Acknowledgement);
+  
+  // Advance turn processing (≤100ms)
+  rpc Advance(AdvanceRequest) returns (EventBatch);
+  
+  // Submit/evaluate deal negotiation (≤80ms)
+  rpc Negotiate(DealRequest) returns (DealResponse);
+}
+
+// ========== CreateMatch ==========
+
+message CreateMatchRequest {
+  string map_name = 1;
+  repeated PlayerConfig players = 2;
+  uint64 seed = 3;
+  string rules_version = 4;
+}
+
+message PlayerConfig {
+  string player_id = 1;
+  string civilization = 2;
+  string controller = 3;  // "human", "ai:planner", etc.
+}
+
+message CreateMatchResponse {
+  string match_id = 1;
+  bytes initial_state_hash = 2;  // 128-bit hash
+  int32 turn = 3;
+}
+
+// ========== GetObservation ==========
+
+message ObservationRequest {
+  string match_id = 1;
+  string player_id = 2;
+}
+
+message Observation {
+  int32 turn = 1;
+  string player_id = 2;
+  
+  // Fog-of-war filtered view
+  View view = 3;
+  
+  // Current yields
+  Yields yields = 4;
+  
+  // Tech tree state
+  TechState tech = 5;
+  
+  // Diplomatic relations
+  DiplomacyState diplomacy = 6;
+  
+  // Legal actions this turn
+  repeated ActionLite legal_actions = 7;
+  
+  // Current state hash for verification
+  bytes state_hash = 8;
+}
+
+message View {
+  repeated TileInfo tiles = 1;
+  repeated CityInfo cities = 2;
+  repeated UnitInfo units = 3;
+}
+
+message TileInfo {
+  int32 x = 1;
+  int32 y = 2;
+  string terrain = 3;
+  repeated string features = 4;
+  bool visible = 5;
+}
+
+message CityInfo {
+  string city_id = 1;
+  string name = 2;
+  int32 x = 3;
+  int32 y = 4;
+  string owner = 5;
+  int32 population = 6;
+}
+
+message UnitInfo {
+  string unit_id = 1;
+  string kind = 2;
+  int32 x = 3;
+  int32 y = 4;
+  string owner = 5;
+  int32 hp = 6;
+  int32 moves_left = 7;
+}
+
+message Yields {
+  int32 food = 1;
+  int32 production = 2;
+  int32 gold = 3;
+  int32 science = 4;
+  int32 culture = 5;
+  int32 influence = 6;
+}
+
+message TechState {
+  repeated string known = 1;
+  repeated string available = 2;
+  repeated string frozen = 3;
+}
+
+message DiplomacyState {
+  repeated Relation relations = 1;
+  repeated string open_offers = 2;
+}
+
+message Relation {
+  string player_id = 1;
+  string status = 2;  // "war", "peace", "allied", etc.
+}
+
+message ActionLite {
+  string action_type = 1;
+  bytes payload = 2;  // JSON-encoded action data
+}
+
+// ========== SubmitAction ==========
+
+message ActionRequest {
+  string match_id = 1;
+  string player_id = 2;
+  int32 turn = 3;
+  
+  // Idempotency key: sha256(match_id|turn|player|action_bytes|prev_state_hash[:8])
+  string action_id = 4;
+  
+  // Serialized Action (JSON)
+  bytes action_bytes = 5;
+  
+  // Previous state hash for validation (first 8 bytes)
+  bytes prev_state_hash_prefix = 6;
+}
+
+message Acknowledgement {
+  bool accepted = 1;
+  string error = 2;  // Empty if accepted
+  string action_id = 3;
+  bytes new_state_hash = 4;
+}
+
+// ========== Advance ==========
+
+message AdvanceRequest {
+  string match_id = 1;
+}
+
+message EventBatch {
+  int32 turn = 1;
+  repeated GameEvent events = 2;
+  bytes state_hash = 3;
+}
+
+message GameEvent {
+  string event_type = 1;
+  string description = 2;
+  bytes payload = 3;
+}
+
+// ========== Negotiate ==========
+
+message DealRequest {
+  string match_id = 1;
+  string from_player = 2;
+  string to_player = 3;
+  string deal_json = 4;  // JSON per Deal_DSL contract
+}
+
+message DealResponse {
+  bool accepted = 1;
+  string reason = 2;
+  string counter_offer_json = 3;  // Optional counter-proposal
+}
+
